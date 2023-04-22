@@ -1,0 +1,9 @@
+# created by virtualenv automatically
+Lib
+Scripts
+Share
+test
+train_data.zip
+.git
+.github
+yolov5s.pt
