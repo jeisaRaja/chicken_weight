@@ -35,6 +35,7 @@ import sys
 from pathlib import Path
 import numpy as np
 import torch
+from predict_weight import *
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
@@ -149,7 +150,7 @@ def run(
             txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset.mode == 'image' else f'_{frame}')  # im.txt
             s += '%gx%g ' % im.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
-            imc = im0.copy() if save_crop else im0  # for save_crop
+            imc = im0.copy() if save_crop or predict_weight else im0  # for save_crop
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
             if len(det):
                 # Rescale boxes from img_size to im0 size
@@ -164,29 +165,49 @@ def run(
                 for *xyxy, conf, cls in reversed(det):
                     if save_txt:  # Write to file
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
-                        print(xywh)
                         line = (cls, *xywh, conf) if save_conf else (cls, *xywh)  # label format
                         with open(f'{txt_path}.txt', 'a') as f:
                             f.write(('%g ' * len(line)).rstrip() % line + '\n')
-
-                    if save_img or save_crop or view_img:  # Add bbox to image
-                        c = int(cls)  # integer class
-                        label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
-                        annotator.box_label(xyxy, label, color=colors(c, True))
-                    if save_crop:
-                        print(xyxy)
-                        save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
+                    
                     if predict_weight:
                         x,y,w,h=int(xyxy[0]), int(xyxy[1]), int(xyxy[2] - xyxy[0]), int(xyxy[3] - xyxy[1])  
-                        img_ = im0.astype(np.uint8)
                         cropped_img = imc[y:y+h, x:x+w]
+                        height =cropped_img.shape[1]
+                        width = cropped_img.shape[0]
+                        cropped_img = cv2.resize(cropped_img, (int(width/4), int(height/4)))
+
+
+                        # file = save_dir / 'crops' / names[c] / f'{p.stem}_.jpg'
+                        # file.parent.mkdir(parents=True, exist_ok=True)
+                        # f = str(increment_path(file).with_suffix('.jpg'))
+                        # cropped_img = cv2.resize(cropped_img, (200,50))
+                        # cv2.imwrite(f, cropped_img)
                         
-                        while True:
-                            cv2.imshow('image', cropped_img)
-                            if cv2.waitKey(1) & 0xFF == ord('q'):
-                                break
-                        cv2.destroyAllWindows()
-                        cv2.imwrite(f'{save_path}/crop.jpg', cropped_img)
+                        background = np.zeros((253, 80, 3), dtype=np.uint8)
+
+                        center_x = int((background.shape[1] - cropped_img.shape[1]) / 2)
+                        center_y = int((background.shape[0] - cropped_img.shape[0]) / 2)
+                        background[center_y:center_y+cropped_img.shape[0], center_x:center_x+cropped_img.shape[1]] = cropped_img
+                        
+                        weight = get_weight(background)
+                        weight_text = str(weight) + " kg"
+
+
+                    if save_img or save_crop or view_img or predict_weight:  # Add bbox to image
+                        c = int(cls)  # integer class
+                        # label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
+                        label = weight_text
+                        annotator.box_label(xyxy, label, color=colors(c, True))
+                    # if save_crop:
+                    #     save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}_.jpg', BGR=True)
+                    
+
+
+            # while True:
+            #     cv2.imshow('image', imc)
+            #     if cv2.waitKey(1) & 0xFF == ord('q'):
+            #         break
+            # cv2.destroyAllWindows()
                         
 
             # Stream results

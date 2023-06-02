@@ -4,6 +4,7 @@ Scripts
 Share
 test
 train_data.zip
+yolov5/runs/detect
 .git
 .github
 yolov5s.pt
